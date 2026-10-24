@@ -44,3 +44,11 @@ export { runPiTurn, piTurnResponse, type PiTurnHandle, type PiTurnSpec } from ".
 export * from "./observability.ts";
 export * from "./model-catalog.ts";
 export * from "./web-session.ts";
+export {
+	browserCommand,
+	browserFrame,
+	browserState,
+	peekBrowserPage,
+	type BrowserCommand,
+	type BrowserState,
+} from "./inapp-browser.ts";

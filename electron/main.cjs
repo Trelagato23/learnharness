@@ -25,6 +25,7 @@
  */
 
 const { app, BrowserWindow, Menu, ipcMain, session, shell, dialog } = require("electron");
+const { startBrowserPane } = require("./browser-pane.cjs");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -183,7 +184,7 @@ function log(line) {
 	}
 }
 
-function startServer(port) {
+function startServer(port, browserBridge) {
 	return new Promise((resolve, reject) => {
 		const child = spawn(
 			process.execPath,
@@ -201,6 +202,11 @@ function startServer(port) {
 					// (no env injection anymore: a spawn-time copy would shadow every
 					// settings-page key change until restart; env wins over file).
 					LH_AUTH_FILE: AUTH_FILE(),
+					// Same WebContentsView the window shows. The phone build has
+					// neither of these and launches its own Chromium instead.
+					...(browserBridge
+						? { LH_BROWSER_BRIDGE: browserBridge.base, LH_BROWSER_TOKEN: browserBridge.token }
+						: {}),
 				},
 				stdio: ["ignore", "pipe", "pipe"],
 			},
@@ -234,7 +240,15 @@ function waitUntilUp(url, tries = 150) {
 	});
 }
 
+let browserPane = null;
+
 function killServer() {
+	try {
+		browserPane?.stop();
+	} catch {
+		/* already stopped */
+	}
+	browserPane = null;
 	if (!serverProcess) return;
 	const child = serverProcess;
 	serverProcess = null;
@@ -557,6 +571,12 @@ async function main() {
 
 	await app.whenReady();
 
+	// The in-app browser view + the loopback bridge the Next server uses
+	// to drive it. Started before the window so a dev `next` process can
+	// pick the bridge file up, and before the packaged server so its env
+	// carries the token.
+	browserPane = await startBrowserPane();
+
 	// Dev mode: point at a running `next dev` server (LH_DEV_URL) — no
 	// spawn, no packaging, full HMR. The rest of this shell still applies
 	// (guards, menu, single instance).
@@ -565,7 +585,7 @@ async function main() {
 	if (!devUrl) {
 		log(`starting server: ${serverEntry()}`);
 		log(`data dir: ${DATA_DIR()}${fs.existsSync(AUTH_FILE()) ? " · auth.json: present" : " · auth.json: ABSENT (no BYOK keys yet)"}`);
-		await startServer(new URL(url).port);
+		await startServer(new URL(url).port, browserPane);
 		await waitUntilUp(url);
 		log(`server up: ${url}`);
 	} else {
@@ -597,9 +617,12 @@ async function main() {
 		if (width < target) win.setBounds({ x, y, width: target, height });
 	});
 	app.on("activate", () => {
-		if (BrowserWindow.getAllWindows().length === 0) createWindow(url);
+		if (BrowserWindow.getAllWindows().length === 0) {
+			const opened = createWindow(url);
+			browserPane?.attach(opened);
+		}
 	});
-	createWindow(url);
+	browserPane?.attach(createWindow(url));
 	log(`window open: ${url}`);
 	// First update check AFTER the window exists (the downloaded-banner
 	// push needs a listener); dev builds no-op (no autoUpdater).

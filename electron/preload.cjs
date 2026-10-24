@@ -42,4 +42,9 @@ contextBridge.exposeInMainWorld("lh", {
 		return () => ipcRenderer.removeListener("lh:update-status", listener);
 	},
 	installUpdate: () => ipcRenderer.send("lh:update-install"),
+	// The in-app browser view is a native WebContentsView. The renderer
+	// reports the page rectangle (CSS pixels); null hides it.
+	browser: {
+		setBounds: (rect) => ipcRenderer.send("lh:browser-bounds", rect),
+	},
 });

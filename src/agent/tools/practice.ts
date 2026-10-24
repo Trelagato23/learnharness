@@ -27,6 +27,7 @@ import { activeProblemOf } from "../../core/native-messages.ts";
 import type { LhMessage } from "../../core/native-messages.ts";
 import { concludeResult, invalidInputResult, problemResult } from "../tool-execute.ts";
 import { healEncodedArguments, healToolRecord } from "./heal.ts";
+import { browserTools } from "./browser.ts";
 
 
 /** The record-reading context the gates need (the plan-tools idiom). */
@@ -242,6 +243,7 @@ export function practiceTools(ctx: PracticeToolContext): Record<string, AgentToo
 		ls: lsTool,
 		find: findTool,
 		grep: grepTool,
+		...browserTools(),
 		...(jobs?.research ? { research: jobs.research } : {}),
 		...(jobs ? { pdf: jobs.pdf! } : {}),
 		...(ctx.graph ? proberGraphTools(ctx.graph) : {}),

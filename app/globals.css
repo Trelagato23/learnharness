@@ -752,3 +752,17 @@ body {
 		flex-shrink: 0;
 	}
 }
+
+/* The browser workspace's chat column is narrow even on a wide monitor.
+   The plan list is the readable form there; the canvas stays for a
+   full-width session. */
+.lh-embed .lh-plan-phone {
+	display: block !important;
+}
+.lh-embed [data-testid="plan-popup"] .lh-plan-phone {
+	display: flex !important;
+	flex-direction: column;
+}
+.lh-embed .lh-plan-desktop {
+	display: none !important;
+}

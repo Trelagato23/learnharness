@@ -684,7 +684,7 @@ export function PlanBlock({ data, onOpen }: { data: PlanBlockData; onOpen: () =>
 		<div className="w-full">
 			{/* Phone: the plan is a collapsible list. The canvas needs a
 			    pointer and a wide flank; a ~412px screen gets the list. */}
-			<div className="sm:hidden">
+			<div className="lh-plan-phone sm:hidden">
 				<PlanOutline nodes={data.nodes} edges={data.edges} statusOf={statusOf} />
 			</div>
 			<Hint label="Open the full plan" side="bottom">
@@ -693,7 +693,7 @@ export function PlanBlock({ data, onOpen }: { data: PlanBlockData; onOpen: () =>
 					data-testid="plan-block-full"
 					aria-label="Open the full plan"
 					onClick={onOpen}
-					className="hidden w-full text-left sm:block"
+					className="lh-plan-desktop hidden w-full text-left sm:block"
 				>
 					{/* pad keeps centered strokes + the glow halo inside the frame; the
 					    cap keeps node text at or below chat prose size while still filling
@@ -915,7 +915,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 				</button>
 </Hint>
 			</div>
-			<div className="min-h-0 flex-1 overflow-y-auto rounded-xl border bg-card/40 px-3 sm:hidden">
+			<div className="lh-plan-phone min-h-0 flex-1 overflow-y-auto rounded-xl border bg-card/40 px-3 sm:hidden">
 				{tree ? (
 					<PlanOutline nodes={tree.nodes} edges={tree.edges} statusOf={statusOf} />
 				) : (
@@ -925,7 +925,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 			<div
 				ref={viewportRef}
 				className={cn(
-					"relative hidden min-h-0 flex-1 touch-none overflow-hidden rounded-xl border select-none sm:block",
+					"lh-plan-desktop relative hidden min-h-0 flex-1 touch-none overflow-hidden rounded-xl border select-none sm:block",
 					atFloor ? "cursor-default" : "cursor-grab",
 				)}
 				onPointerDown={startDrag}

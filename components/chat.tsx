@@ -203,6 +203,7 @@ export function Chat({
 	initiallyCompacting = false,
 	initialConfigured = false,
 	kind = "teach",
+	embedded = false,
 }: {
 	chatId: string;
 	title: string;
@@ -224,6 +225,9 @@ export function Chat({
 	 *  it (BYOK, owner 2026-09-22). The server gate stays the truth; this
 	 *  only decides whether the pill rides the composer. */
 	initialConfigured?: boolean;
+	/** Fill the parent instead of the viewport. The browser workspace
+	 *  puts the chat in a side panel (or a phone tab). */
+	embedded?: boolean;
 }) {
 	// Reattach plumbing (background-turn runner wave): the hook holds the
 	// settled terminal's callback — a stable ref assigned below, once
@@ -1190,7 +1194,7 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div className="flex h-dvh">
+		<div className={embedded ? "lh-embed flex h-full min-h-0" : "flex h-dvh"}>
 			<div className="flex min-w-0 flex-1 flex-col">
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its

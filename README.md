@@ -130,9 +130,19 @@ docker compose up -d --build
 
 Compose publishes port `${PORT:-3000}` and stores data in the `lh-data` volume. Optional environment variables, same names as above: `LH_SESSION_SECRET`, `LH_COOKIE_SECURE`, `LH_SESSION_DAYS`.
 
-PDF and SVG rendering work in the image. Interactive demos need a Chromium binary on the host or in the image and `CHROME_PATH` pointing at it; the default image does not download a browser.
+The image installs Chrome and sets `CHROME_PATH=/usr/local/bin/chrome`. That binary is the in-app browser and the demo checker. On a machine without Docker, install Chrome or Chromium and point `CHROME_PATH` at the executable (`/usr/bin/chromium`, `/usr/bin/google-chrome`, or a Chrome you already have). If it is unset, the server also looks in those common paths.
 
-The desktop Electron app is unchanged: it does not set `LH_PASSWORD` or `LH_HEADLESS`, and it still binds `127.0.0.1`.
+### In-app browser
+
+Open **Browser** in the sidebar (or go to `/browse`). The page fills the main area. The agent chat sits in a panel on the right: drag the divider to resize it, or hide it. On a phone the two do not sit side by side — use the Chat / Browser button, or swipe the toolbar, to switch.
+
+Type an address and press Enter. Back, forward, reload, and tabs are on the toolbar. **Text** shows the readable article; highlight a passage there and the next chat message includes it. In the desktop app the page itself is a real browser view, so a highlight in the page is picked up the same way.
+
+Ask in the chat about "this page". The open tab's address, title, and (when you said "this page" or highlighted something) its text are attached to that message. The agent can also call `browser_navigate`, `browser_read_page`, `browser_screenshot`, `browser_click`, `browser_type`, and `browser_scroll`.
+
+The desktop app draws the page with Electron's WebContentsView. A phone, or any browser pointed at the server, gets a live picture of a headless Chrome on the server and clicks, typing, and scrolling are sent back to it. One session per server process. It is behind the same `LH_PASSWORD` login as the rest of the app. The Docker image's Chrome is that session; set `CHROME_PATH` if you run without Docker and the server cannot find a browser.
+
+The desktop app still does not set `LH_PASSWORD` or `LH_HEADLESS`, and it still binds `127.0.0.1`. Its window now also hosts the in-app browser.
 
 ## License
 
