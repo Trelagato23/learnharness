@@ -27,7 +27,7 @@
  * EXPAND icon (opens the session overlay) when a chat page is mounted.
  */
 
-import { cloneElement, isValidElement, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
 import { CheckIcon, CopyIcon, MaximizeIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -413,10 +413,46 @@ export function MarkdownTable(props: ComponentProps<"table"> & ExtraProps) {
  *  static render). They gain the corner copy (the raw TeX — KaTeX embeds it
  *  in the MathML <annotation>; read from the DOM on click, no re-parse).
  *  Every other span passes through untouched. */
+/** On a phone, scale a display equation down (to 55%) so the whole
+ *  formula is on screen. Wider than that still scrolls. Desktop is left
+ *  at KaTeX's own size — the column there is wide enough. */
+function usePhoneMathFit(boxRef: RefObject<HTMLSpanElement | null>, active: boolean) {
+	useEffect(() => {
+		if (!active) return;
+		const box = boxRef.current;
+		if (!box || typeof window.matchMedia !== "function") return;
+		const katex = box.querySelector(".katex") as HTMLElement | null;
+		if (!katex) return;
+		const fit = () => {
+			katex.style.transform = "";
+			katex.style.display = "";
+			box.style.height = "";
+			box.style.overflow = "";
+			if (!window.matchMedia("(max-width: 639px)").matches) return;
+			const available = box.clientWidth;
+			const needed = katex.scrollWidth;
+			if (available <= 0 || needed <= available + 1) return;
+			const scale = Math.max(0.55, available / needed);
+			katex.style.transformOrigin = "left top";
+			katex.style.display = "inline-block";
+			katex.style.transform = `scale(${scale})`;
+			box.style.height = `${katex.offsetHeight * scale}px`;
+			box.style.overflow = "hidden";
+		};
+		fit();
+		if (typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(fit);
+		ro.observe(box);
+		return () => ro.disconnect();
+	}, [active, boxRef]);
+}
+
 export function MathDisplay(props: ComponentProps<"span"> & ExtraProps) {
 	const { children, className, node, ...rest } = props;
 	const ref = useRef<HTMLSpanElement>(null);
-	if (!className?.includes("katex-display")) {
+	const display = className?.includes("katex-display") ?? false;
+	usePhoneMathFit(ref, display);
+	if (!display) {
 		return (
 			<span className={className} {...rest}>
 				{children}

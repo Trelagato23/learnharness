@@ -613,10 +613,11 @@ body {
 }
 
 @media (hover: none) {
+	/* Visible without a hover, but kept at the icon's own size: a 44px
+	   hit box sits on top of display math and hides the right-hand side
+	   of the equation. */
 	.lh-reveal {
 		opacity: 1;
-		min-width: 44px;
-		min-height: 44px;
 	}
 }
 
@@ -705,5 +706,49 @@ body {
 	.katex-display {
 		max-width: 100%;
 		overflow-x: auto;
+	}
+	/* Flex items default to min-width:auto, so one wide KaTeX line
+	   stretches the transcript and max-width:100% never binds. Pin the
+	   column, then scroll the equation inside it. The copy corner stays
+	   on the wrapper; padding keeps the formula's end scrollable past it. */
+	[data-session-find-root] > * {
+		min-width: 0;
+		max-width: 100%;
+	}
+	[data-testid="md-math"] {
+		display: block;
+		max-width: 100%;
+	}
+	/* The copy corner is absolutely positioned over the equation on
+	   desktop. On a phone that covers the right-hand side of a formula
+	   that is already scrolling, so lift it into its own row. */
+	[data-testid="md-math"] > .absolute {
+		position: static;
+		display: flex;
+		justify-content: flex-end;
+	}
+	[data-testid="md-math"] .lh-reveal {
+		min-width: 44px;
+		min-height: 44px;
+	}
+	[data-testid="md-math"] > .katex-display {
+		box-sizing: border-box;
+		overflow-y: hidden;
+		scrollbar-width: thin;
+	}
+	/* Home graph chrome is one right-aligned row. On a phone it is wider
+	   than the screen; scroll it instead of letting the search box run
+	   off the left edge. */
+	.lh-wco-floating {
+		left: 3.25rem;
+		right: 0.5rem;
+		max-width: none;
+	}
+	.lh-wco-floating > div {
+		max-width: 100%;
+		overflow-x: auto;
+	}
+	.lh-wco-floating > div > * {
+		flex-shrink: 0;
 	}
 }
