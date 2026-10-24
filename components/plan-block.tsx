@@ -16,6 +16,7 @@ import { fitGraphView, fitZoomFor, zoomedGraphView, type Viewport } from "@/comp
 import type { PlanBlockData, PlanNodeStatus, PlanTree } from "@/src/core";
 import { derivedNodeStatus, derivePlanStatuses } from "@/src/core";
 import { Hint } from "@/components/ui/hint";
+import { PlanOutline } from "@/components/plan-outline";
 
 /**
  * PLAN BLOCKS — the plan lives in the chat (wave 4): persisted
@@ -680,28 +681,35 @@ export function PlanBlock({ data, onOpen }: { data: PlanBlockData; onOpen: () =>
 	const statusMap = useMemo(() => new Map(data.nodes.map((n) => [n.id, n.status] as const)), [data]);
 	const statusOf = (id: string): PlanNodeStatus => statusMap.get(id) ?? "upcoming";
 	return (
-		<Hint label="Open the full plan" side="bottom">
-<button
-			type="button"
-			data-testid="plan-block-full"
-			aria-label="Open the full plan"
-			onClick={onOpen}
-			className="block w-full text-left"
-		>
-			{/* pad keeps centered strokes + the glow halo inside the frame; the
-		    cap keeps node text at or below chat prose size while still filling
-		    the column when it can (owner, plan-graph refinement round 1). */}
-		<PlanDiagram
-			nodes={data.nodes}
-			edges={data.edges}
-			statusOf={statusOf}
-			markerId={markerId}
-			pad={GRAPH_PAD}
-			textCapScale={TEXT_CAP_SCALE}
-			monochrome
-		/>
-		</button>
-</Hint>
+		<div className="w-full">
+			{/* Phone: the plan is a collapsible list. The canvas needs a
+			    pointer and a wide flank; a ~412px screen gets the list. */}
+			<div className="sm:hidden">
+				<PlanOutline nodes={data.nodes} edges={data.edges} statusOf={statusOf} />
+			</div>
+			<Hint label="Open the full plan" side="bottom">
+				<button
+					type="button"
+					data-testid="plan-block-full"
+					aria-label="Open the full plan"
+					onClick={onOpen}
+					className="hidden w-full text-left sm:block"
+				>
+					{/* pad keeps centered strokes + the glow halo inside the frame; the
+					    cap keeps node text at or below chat prose size while still filling
+					    the column when it can (owner, plan-graph refinement round 1). */}
+					<PlanDiagram
+						nodes={data.nodes}
+						edges={data.edges}
+						statusOf={statusOf}
+						markerId={markerId}
+						pad={GRAPH_PAD}
+						textCapScale={TEXT_CAP_SCALE}
+						monochrome
+					/>
+				</button>
+			</Hint>
+		</div>
 	);
 }
 
@@ -894,7 +902,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 		>
 			<div className="mb-2 flex items-center gap-2">
 				<span className="text-sm font-medium">The plan</span>
-				<span className="text-xs text-muted-foreground">live — statuses derive from your check outcomes</span>
+				<span className="hidden text-xs text-muted-foreground sm:inline">live — statuses derive from your check outcomes</span>
 				<Hint label="Close" binding="escape" side="left">
 <button
 					type="button"
@@ -907,10 +915,17 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 				</button>
 </Hint>
 			</div>
+			<div className="min-h-0 flex-1 overflow-y-auto rounded-xl border bg-card/40 px-3 sm:hidden">
+				{tree ? (
+					<PlanOutline nodes={tree.nodes} edges={tree.edges} statusOf={statusOf} />
+				) : (
+					<p className="py-6 text-sm text-muted-foreground">No plan yet.</p>
+				)}
+			</div>
 			<div
 				ref={viewportRef}
 				className={cn(
-					"relative min-h-0 flex-1 touch-none overflow-hidden rounded-xl border select-none",
+					"relative hidden min-h-0 flex-1 touch-none overflow-hidden rounded-xl border select-none sm:block",
 					atFloor ? "cursor-default" : "cursor-grab",
 				)}
 				onPointerDown={startDrag}

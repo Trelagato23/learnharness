@@ -598,3 +598,112 @@ body {
 	outline: 1px solid var(--border);
 	border-radius: 0.25rem;
 }
+
+/* Phone sheet + touch targets. Desktop (min-width 640px, and any hover
+   device) keeps the existing chrome. Copy/expand corners that only appear
+   on hover stay visible when the device has no hover. */
+.lh-plan-chevron {
+	transition: transform 120ms ease-out;
+}
+.lh-plan-outline details[open] > summary > .lh-plan-chevron {
+	transform: rotate(90deg);
+}
+.lh-plan-outline summary {
+	list-style: none;
+}
+
+@media (hover: none) {
+	.lh-reveal {
+		opacity: 1;
+		min-width: 44px;
+		min-height: 44px;
+	}
+}
+
+@media (max-width: 639px) {
+	body {
+		touch-action: manipulation;
+	}
+	.font-title.text-3xl {
+		font-size: 1.5rem;
+		line-height: 1.25;
+	}
+	aside.lh-sidebar {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		width: 100% !important;
+		max-width: none;
+		background: var(--background);
+	}
+	aside.lh-sidebar[aria-hidden="true"] {
+		display: none;
+	}
+	aside.lh-sidebar > div {
+		width: 100% !important;
+		padding-bottom: env(safe-area-inset-bottom);
+	}
+	aside.lh-sidebar button,
+	aside.lh-sidebar a {
+		min-height: 44px;
+	}
+	aside.lh-sidebar input {
+		min-height: 44px;
+		font-size: 16px;
+	}
+	[data-testid="session-context-menu"] button,
+	[data-testid="question-dock"] button,
+	[data-testid="practice-dock"] button,
+	[data-testid="plan-chip"],
+	[data-testid="teach-check-reveal"],
+	[data-testid="setup-cta"],
+	[data-testid="home-mode-teach"],
+	[data-testid="home-mode-practice"],
+	[data-testid="settings-nav"] button,
+	button[aria-label="Send"],
+	button[aria-label="Start session"],
+	button[aria-label="Open sidebar"],
+	button[aria-label="Close sidebar"],
+	button[aria-label="Close"],
+	button[aria-label="Close settings"] {
+		min-height: 44px;
+	}
+	button[aria-label="Send"],
+	button[aria-label="Start session"],
+	button[aria-label="Open sidebar"],
+	button[aria-label="Close sidebar"],
+	button[aria-label="Close"],
+	button[aria-label="Close settings"] {
+		min-width: 44px;
+	}
+	[data-testid="settings-dialog"] {
+		height: 100dvh;
+		max-height: none;
+		width: 100%;
+		max-width: none;
+		border-radius: 0;
+	}
+	[data-testid="settings-backdrop"] {
+		align-items: stretch;
+		padding: 0;
+	}
+	[data-testid="settings-dialog"] > div.flex {
+		flex-direction: column;
+	}
+	[data-testid="settings-nav"] {
+		flex-direction: row;
+		width: 100%;
+		overflow-x: auto;
+		border-right: 0;
+		border-bottom: 1px solid var(--border);
+	}
+	[data-testid="settings-nav"] button {
+		flex-shrink: 0;
+	}
+	.lh-prose pre,
+	[data-streamdown="code-block"],
+	.katex-display {
+		max-width: 100%;
+		overflow-x: auto;
+	}
+}

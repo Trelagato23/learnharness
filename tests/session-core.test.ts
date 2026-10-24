@@ -761,6 +761,36 @@ describe("resumeStream (the reattach path)", () => {
 		assert.equal(m.getState().messages.at(-1)!.parts.at(-1)!.text, "hi");
 	});
 
+	it("a dropped stream with reconnectOnDrop reattaches instead of ending the turn", async () => {
+		let streams = 0;
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url === "/api/chats/chat_x") return Response.json({ messages: [] });
+			if (url === "/api/chats/chat_x/stream") {
+				streams += 1;
+				if (streams === 1) {
+					// Body ends with no [DONE] — the phone locked mid-turn.
+					return new Response(
+						`data: ${JSON.stringify({ type: "message_start", message: { role: "assistant", content: [{ type: "text", text: "partial" }] } })}\n\n`,
+					);
+				}
+				return sseResponse(
+					{ type: "message_start", message: { role: "assistant", content: [{ type: "text", text: "partial" }] } },
+					{ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "partial" }], stopReason: "stop" } },
+					{ type: "agent_end", messages: [] },
+					"[DONE]",
+				);
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		}) as typeof globalThis.fetch;
+		const m = model({ reconnectOnDrop: true, reconnectDelayMs: 0 });
+		await m.resumeStream();
+		assert.equal(streams, 2, "the dead socket is followed by one reattach");
+		assert.equal(m.getState().status, "ready");
+		assert.equal(m.getState().error, null);
+		assert.equal(m.recoverPending, false);
+	});
+
 	it("an unhappy endpoint surfaces the error banner", async () => {
 		globalThis.fetch = (async (input: RequestInfo | URL) => {
 			const url = String(input);

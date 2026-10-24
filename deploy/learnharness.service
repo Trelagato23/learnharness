@@ -1,0 +1,42 @@
+# systemd unit for a headless LearnHarness on the host (Arch or Debian).
+#
+# Install:
+#   sudo useradd --system --home /var/lib/learnharness --create-home learnharness
+#   sudo mkdir -p /opt/learnharness
+#   sudo rsync -a --exclude data --exclude node_modules ./ /opt/learnharness/
+#   cd /opt/learnharness && sudo npm ci && sudo npm run build && sudo node scripts/build-server.mjs
+#   sudo cp deploy/learnharness.service /etc/systemd/system/learnharness.service
+#   # /etc/learnharness.env (mode 0600), at least:
+#   #   LH_PASSWORD=...
+#   #   LH_DATA_DIR=/var/lib/learnharness
+#   #   PORT=3000
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now learnharness
+#
+# Node 22+ must be on the PATH used below. Adjust ExecStart if `node` lives elsewhere
+# (`command -v node`).
+
+[Unit]
+Description=LearnHarness headless server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=learnharness
+Group=learnharness
+WorkingDirectory=/opt/learnharness
+Environment=NODE_ENV=production
+Environment=HOSTNAME=0.0.0.0
+Environment=PORT=3000
+Environment=LH_DATA_DIR=/var/lib/learnharness
+Environment=LH_AUTH_FILE=/var/lib/learnharness/auth.json
+Environment=LH_HEADLESS=1
+EnvironmentFile=/etc/learnharness.env
+ExecStart=/usr/bin/node /opt/learnharness/scripts/serve-headless.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
