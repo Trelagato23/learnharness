@@ -598,3 +598,171 @@ body {
 	outline: 1px solid var(--border);
 	border-radius: 0.25rem;
 }
+
+/* Phone sheet + touch targets. Desktop (min-width 640px, and any hover
+   device) keeps the existing chrome. Copy/expand corners that only appear
+   on hover stay visible when the device has no hover. */
+.lh-plan-chevron {
+	transition: transform 120ms ease-out;
+}
+.lh-plan-outline details[open] > summary > .lh-plan-chevron {
+	transform: rotate(90deg);
+}
+.lh-plan-outline summary {
+	list-style: none;
+}
+
+@media (hover: none) {
+	/* Visible without a hover, but kept at the icon's own size: a 44px
+	   hit box sits on top of display math and hides the right-hand side
+	   of the equation. */
+	.lh-reveal {
+		opacity: 1;
+	}
+}
+
+@media (max-width: 639px) {
+	body {
+		touch-action: manipulation;
+	}
+	.font-title.text-3xl {
+		font-size: 1.5rem;
+		line-height: 1.25;
+	}
+	aside.lh-sidebar {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		width: 100% !important;
+		max-width: none;
+		background: var(--background);
+	}
+	aside.lh-sidebar[aria-hidden="true"] {
+		display: none;
+	}
+	aside.lh-sidebar > div {
+		width: 100% !important;
+		padding-bottom: env(safe-area-inset-bottom);
+	}
+	aside.lh-sidebar button,
+	aside.lh-sidebar a {
+		min-height: 44px;
+	}
+	aside.lh-sidebar input {
+		min-height: 44px;
+		font-size: 16px;
+	}
+	[data-testid="session-context-menu"] button,
+	[data-testid="question-dock"] button,
+	[data-testid="practice-dock"] button,
+	[data-testid="plan-chip"],
+	[data-testid="teach-check-reveal"],
+	[data-testid="setup-cta"],
+	[data-testid="home-mode-teach"],
+	[data-testid="home-mode-practice"],
+	[data-testid="settings-nav"] button,
+	button[aria-label="Send"],
+	button[aria-label="Start session"],
+	button[aria-label="Open sidebar"],
+	button[aria-label="Close sidebar"],
+	button[aria-label="Close"],
+	button[aria-label="Close settings"] {
+		min-height: 44px;
+	}
+	button[aria-label="Send"],
+	button[aria-label="Start session"],
+	button[aria-label="Open sidebar"],
+	button[aria-label="Close sidebar"],
+	button[aria-label="Close"],
+	button[aria-label="Close settings"] {
+		min-width: 44px;
+	}
+	[data-testid="settings-dialog"] {
+		height: 100dvh;
+		max-height: none;
+		width: 100%;
+		max-width: none;
+		border-radius: 0;
+	}
+	[data-testid="settings-backdrop"] {
+		align-items: stretch;
+		padding: 0;
+	}
+	[data-testid="settings-dialog"] > div.flex {
+		flex-direction: column;
+	}
+	[data-testid="settings-nav"] {
+		flex-direction: row;
+		width: 100%;
+		overflow-x: auto;
+		border-right: 0;
+		border-bottom: 1px solid var(--border);
+	}
+	[data-testid="settings-nav"] button {
+		flex-shrink: 0;
+	}
+	.lh-prose pre,
+	[data-streamdown="code-block"],
+	.katex-display {
+		max-width: 100%;
+		overflow-x: auto;
+	}
+	/* Flex items default to min-width:auto, so one wide KaTeX line
+	   stretches the transcript and max-width:100% never binds. Pin the
+	   column, then scroll the equation inside it. The copy corner stays
+	   on the wrapper; padding keeps the formula's end scrollable past it. */
+	[data-session-find-root] > * {
+		min-width: 0;
+		max-width: 100%;
+	}
+	[data-testid="md-math"] {
+		display: block;
+		max-width: 100%;
+	}
+	/* The copy corner is absolutely positioned over the equation on
+	   desktop. On a phone that covers the right-hand side of a formula
+	   that is already scrolling, so lift it into its own row. */
+	[data-testid="md-math"] > .absolute {
+		position: static;
+		display: flex;
+		justify-content: flex-end;
+	}
+	[data-testid="md-math"] .lh-reveal {
+		min-width: 44px;
+		min-height: 44px;
+	}
+	[data-testid="md-math"] > .katex-display {
+		box-sizing: border-box;
+		overflow-y: hidden;
+		scrollbar-width: thin;
+	}
+	/* Home graph chrome is one right-aligned row. On a phone it is wider
+	   than the screen; scroll it instead of letting the search box run
+	   off the left edge. */
+	.lh-wco-floating {
+		left: 3.25rem;
+		right: 0.5rem;
+		max-width: none;
+	}
+	.lh-wco-floating > div {
+		max-width: 100%;
+		overflow-x: auto;
+	}
+	.lh-wco-floating > div > * {
+		flex-shrink: 0;
+	}
+}
+
+/* The browser workspace's chat column is narrow even on a wide monitor.
+   The plan list is the readable form there; the canvas stays for a
+   full-width session. */
+.lh-embed .lh-plan-phone {
+	display: block !important;
+}
+.lh-embed [data-testid="plan-popup"] .lh-plan-phone {
+	display: flex !important;
+	flex-direction: column;
+}
+.lh-embed .lh-plan-desktop {
+	display: none !important;
+}

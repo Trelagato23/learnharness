@@ -200,7 +200,7 @@ describe("the practice agent", () => {
 		const tools = practiceTools(ctxOf([]));
 		assert.deepEqual(
 			Object.keys(tools).sort(),
-			["conclude", "find", "grep", "ls", "problem", "read"],
+			["browser_click", "browser_navigate", "browser_read_page", "browser_screenshot", "browser_scroll", "browser_type", "conclude", "find", "grep", "ls", "problem", "read"],
 		);
 	});
 
@@ -212,7 +212,7 @@ describe("the practice agent", () => {
 		// prober's two map readers behind the settings gate.
 		assert.deepEqual(
 			Object.keys(tools).sort(),
-			["conclude", "find", "grep", "list_propositions", "list_sessions", "ls", "pdf", "problem", "read"],
+			["browser_click", "browser_navigate", "browser_read_page", "browser_screenshot", "browser_scroll", "browser_type", "conclude", "find", "grep", "list_propositions", "list_sessions", "ls", "pdf", "problem", "read"],
 		);
 		const withSearch = practiceTools({ ...ctxOf([]), jobs: { ...jobs, searchAvailable: () => true }, graph });
 		assert.ok(withSearch.research, "a live engine adds research");

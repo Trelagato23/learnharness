@@ -11,6 +11,7 @@
 <p align="center">
   <a href="https://learnharness.ai">Download</a> ·
   <a href="#how-it-works">How it works</a> ·
+  <a href="#self-hosting-on-a-homelab--phone">Self-hosting</a> ·
   <a href="docs/development.md">Documentation</a> ·
   <a href="https://github.com/amosblomqvist/learnharness/issues">Issues</a>
 </p>
@@ -70,6 +71,78 @@ npm test           # deterministic, no LLM, no network
 See the [development guide](docs/development.md), [architecture](docs/architecture.md), and [desktop release guide](docs/desktop-release.md).
 
 Questions, bug reports, and feature requests: [GitHub Issues](https://github.com/amosblomqvist/learnharness/issues).
+
+## Self-hosting on a homelab / phone
+
+This runs the same Next.js server the desktop app wraps, without Electron. It listens on `0.0.0.0` so a phone on the LAN or a Tailscale network can open it. Set `LH_PASSWORD` before binding anything that is not loopback — the process exits if you do not. With the password set, every page and `/api/*` route requires a login. The session cookie is `HttpOnly` and `SameSite=Lax`. It is marked `Secure` when the request is HTTPS (`x-forwarded-proto: https`, or an `https:` URL). On plain HTTP (a typical LAN) leave `LH_COOKIE_SECURE` unset so the browser will store the cookie; put Tailscale Serve or another TLS proxy in front and set `LH_COOKIE_SECURE=1` if you want the cookie marked Secure.
+
+Chats, the graph, settings, and provider API keys live under `LH_DATA_DIR` (default `./data` for the script below, `/data` in Docker). Keys are written to `LH_AUTH_FILE` (default `$LH_DATA_DIR/auth.json`). Node.js 22 or newer.
+
+### Bare metal (Arch or Debian)
+
+From a checkout:
+
+```bash
+npm ci
+npm run build
+node scripts/build-server.mjs
+
+export LH_PASSWORD='choose-a-long-password'
+export LH_DATA_DIR="$HOME/learnharness-data"
+export PORT=3000
+# optional: export LH_SESSION_SECRET='separate-hmac-key'
+# optional: export LH_SESSION_DAYS=30
+npm run headless
+```
+
+`npm run headless` is `node scripts/serve-headless.mjs`. It binds `0.0.0.0:$PORT` unless you set `HOSTNAME`. Loopback without a password is allowed:
+
+```bash
+HOSTNAME=127.0.0.1 npm run headless
+```
+
+Open `http://<lan-or-tailscale-ip>:3000` on the phone, sign in, then use the browser menu **Add to Home screen** / **Install app**. The installed icon is a standalone window. A service worker caches the static shell only; API calls and live turns are never cached. If the screen locks mid-turn, the server keeps the turn running. Unlocking the phone reattaches to that stream instead of dropping it.
+
+### systemd
+
+Build into `/opt/learnharness` as above (`npm ci`, `npm run build`, `node scripts/build-server.mjs`). Then:
+
+```bash
+sudo useradd --system --home /var/lib/learnharness --create-home learnharness
+sudo install -m 0600 /dev/null /etc/learnharness.env
+sudo tee /etc/learnharness.env >/dev/null <<'EOF'
+LH_PASSWORD=choose-a-long-password
+EOF
+sudo cp deploy/learnharness.service /etc/systemd/system/learnharness.service
+# If node is not /usr/bin/node, edit ExecStart (`command -v node`).
+sudo systemctl daemon-reload
+sudo systemctl enable --now learnharness
+```
+
+The unit sets `HOSTNAME=0.0.0.0`, `PORT=3000`, `LH_DATA_DIR=/var/lib/learnharness`, and `LH_AUTH_FILE=/var/lib/learnharness/auth.json`. Logs: `journalctl -u learnharness -f`.
+
+### Docker
+
+```bash
+export LH_PASSWORD='choose-a-long-password'
+docker compose up -d --build
+```
+
+Compose publishes port `${PORT:-3000}` and stores data in the `lh-data` volume. Optional environment variables, same names as above: `LH_SESSION_SECRET`, `LH_COOKIE_SECURE`, `LH_SESSION_DAYS`.
+
+The image installs Chrome and sets `CHROME_PATH=/usr/local/bin/chrome`. That binary is the in-app browser and the demo checker. On a machine without Docker, install Chrome or Chromium and point `CHROME_PATH` at the executable (`/usr/bin/chromium`, `/usr/bin/google-chrome`, or a Chrome you already have). If it is unset, the server also looks in those common paths.
+
+### In-app browser
+
+Open **Browser** in the sidebar (or go to `/browse`). The page fills the main area. The agent chat sits in a panel on the right: drag the divider to resize it, or hide it. On a phone the two do not sit side by side — use the Chat / Browser button, or swipe the toolbar, to switch.
+
+Type an address and press Enter. Back, forward, reload, and tabs are on the toolbar. **Text** shows the readable article; highlight a passage there and the next chat message includes it. In the desktop app the page itself is a real browser view, so a highlight in the page is picked up the same way.
+
+Ask in the chat about "this page". The open tab's address, title, and (when you said "this page" or highlighted something) its text are attached to that message. The agent can also call `browser_navigate`, `browser_read_page`, `browser_screenshot`, `browser_click`, `browser_type`, and `browser_scroll`.
+
+The desktop app draws the page with Electron's WebContentsView. A phone, or any browser pointed at the server, gets a live picture of a headless Chrome on the server and clicks, typing, and scrolling are sent back to it. One session per server process. It is behind the same `LH_PASSWORD` login as the rest of the app. The Docker image's Chrome is that session; set `CHROME_PATH` if you run without Docker and the server cannot find a browser.
+
+The desktop app still does not set `LH_PASSWORD` or `LH_HEADLESS`, and it still binds `127.0.0.1`. Its window now also hosts the in-app browser.
 
 ## License
 

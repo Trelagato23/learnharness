@@ -52,6 +52,8 @@ import {
 	type TurnInput,
 } from "../core/input-events.ts";
 import { steerDelivered } from "../core/contracts.ts";
+import { attachBrowserContext } from "../core/browser-page.ts";
+import { peekBrowserPage } from "./inapp-browser.ts";
 import type {CallUsage, SteerMessage} from "../core/contracts.ts";
 
 /**
@@ -242,12 +244,24 @@ export async function handleChatInput(
 	// re-fire of an already-landed one) - with claimSteers gone, this wake
 	// input is the only steer appender; in-run delivery rides pi's own
 	// follow-up queue and never builds an input event at all.
+	// The open in-app browser tab rides a text send. A blank tab adds
+	// nothing. Failure here must not refuse the turn.
+	let turnInput = input;
+	if (turnInput.type === "text") {
+		try {
+			const page = await peekBrowserPage();
+			turnInput = { ...turnInput, text: attachBrowserContext(turnInput.text, page) };
+		} catch (err) {
+			console.info(`[chat ${chatId}] browser context skipped: ${err instanceof Error ? err.message : err}`);
+		}
+	}
+
 	let appends;
 	try {
 		appends =
-			input.type === "steers"
-				? input.steers.filter((s) => !steerDelivered(record.messages, s.id))
-				: inputAppends(record, input);
+			turnInput.type === "steers"
+				? turnInput.steers.filter((s) => !steerDelivered(record.messages, s.id))
+				: inputAppends(record, turnInput);
 	} catch (err) {
 		if (err instanceof ChatInputError) {
 			return Response.json({ error: err.message }, { status: 400 });

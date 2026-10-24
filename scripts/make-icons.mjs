@@ -15,7 +15,7 @@
 // edges than downsampling a raster. Committed outputs; rerun only when
 // the design changes: `node scripts/make-icons.mjs`.
 import { Resvg } from "@resvg/resvg-js";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -53,3 +53,13 @@ console.log(`build/icon.ico  ${ICO_SIZES.join("/")} — ${(ico.length / 1024).to
 const png512 = render(512);
 writeFileSync(path.join(root, "build", "icon.png"), png512);
 console.log(`build/icon.png  512×512 — ${(png512.length / 1024).toFixed(1)} KB`);
+
+// PWA / home-screen icons. Same SVG source as the Linux icon.
+const iconsDir = path.join(root, "public", "icons");
+mkdirSync(iconsDir, { recursive: true });
+for (const size of [180, 192, 512]) {
+	const name = size === 180 ? "apple-touch-icon.png" : `icon-${size}.png`;
+	const png = render(size);
+	writeFileSync(path.join(iconsDir, name), png);
+	console.log(`public/icons/${name}  ${size}×${size} — ${(png.length / 1024).toFixed(1)} KB`);
+}

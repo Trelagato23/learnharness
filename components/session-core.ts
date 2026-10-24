@@ -37,6 +37,9 @@ export type SessionStatus = "ready" | "submitted" | "streaming" | "error";
 export const TURN_POLL_MS = 500;
 /** Give up waiting (a wake turn can run long) and surface the 409. */
 export const TURN_WAIT_MAX_MS = 30_000;
+/** Dropped turn streams (phone lock, flaky LAN) reattach this many times
+ *  before the error banner. A later visibility/online event starts over. */
+export const STREAM_RECONNECT_MAX = 8;
 
 export interface SessionModelDeps {
 	/** Injectable fetch (tests); defaults to the global. */
@@ -44,6 +47,10 @@ export interface SessionModelDeps {
 	/** Injectable retry timing (tests). */
 	pollMs?: number;
 	waitMaxMs?: number;
+	/** Reattach when the turn stream dies before [DONE] (phone lock). */
+	reconnectOnDrop?: boolean;
+	/** Override the backoff (tests). */
+	reconnectDelayMs?: number;
 }
 
 /** A local optimistic id (never a server stamp — absorption and the
@@ -51,6 +58,13 @@ export interface SessionModelDeps {
 let localSeq = 0;
 function localId(): string {
 	return `c_${Date.now().toString(36)}_${(localSeq++).toString(36)}`;
+}
+
+/** A dead socket, not an HTTP error body. Those get a reattach; a 503 does not. */
+function isTransientStreamError(err: unknown): boolean {
+	if (!(err instanceof Error) || err.name === "AbortError") return false;
+	if (err.name === "TypeError") return true;
+	return /network|failed to fetch|terminated|socket|ECONNRESET|EPIPE/i.test(err.message);
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
@@ -93,7 +107,10 @@ async function* sseEvents(reader: ReadableStreamDefaultReader<Uint8Array>): Asyn
 			const dataLine = event.split("\n").find((l) => l.startsWith("data: "));
 			if (!dataLine) continue;
 			const data = dataLine.slice("data: ".length);
-			if (data === "[DONE]") return;
+			if (data === "[DONE]") {
+				yield { type: "__lh_done" };
+				return;
+			}
 			yield JSON.parse(data) as Record<string, unknown>;
 		}
 	}
@@ -208,6 +225,11 @@ export class SessionModel {
 	private steerQueueValue: SteerQueueItem[] = [];
 	private readonly pollMs: number;
 	private readonly waitMaxMs: number;
+	private readonly reconnectOnDrop: boolean;
+	private readonly reconnectDelayMs: number | undefined;
+	private dropAttempts = 0;
+	/** The stream died and retries are exhausted. Visibility/online may try again. */
+	recoverPending = false;
 	private onReattachSettled?: () => void;
 	/** The hook's re-render trigger (set by the adapter). */
 	onChange?: () => void;
@@ -240,6 +262,8 @@ export class SessionModel {
 		this.fetch = opts.fetch ?? ((...args) => globalThis.fetch(...args));
 		this.pollMs = opts.pollMs ?? TURN_POLL_MS;
 		this.waitMaxMs = opts.waitMaxMs ?? TURN_WAIT_MAX_MS;
+		this.reconnectOnDrop = opts.reconnectOnDrop ?? false;
+		this.reconnectDelayMs = opts.reconnectDelayMs;
 		this.onChange = opts.onChange;
 		this.onReattachSettled = opts.onReattachSettled;
 	}
@@ -425,19 +449,27 @@ export class SessionModel {
 	}
 
 	/** Consume one SSE body to its [DONE] terminal. The turn-settled
-	 *  terminal (stream-route only) fires the settle hook and ends. */
-	async consumeStream(res: Response): Promise<void> {
+	 *  terminal (stream-route only) fires the settle hook and ends.
+	 *  "dropped" means the body closed with no [DONE] and no turn-settled
+	 *  — a phone lock or a dead socket, not a finished turn. */
+	async consumeStream(res: Response): Promise<"done" | "settled" | "dropped"> {
 		if (!res.body) throw new Error("The turn stream body is empty.");
 		const reader = res.body.getReader();
 		let sawEvent = false;
+		let terminal: "done" | "settled" | "dropped" = "dropped";
 		try {
 			for await (const event of sseEvents(reader)) {
+				if (event.type === "__lh_done") {
+					terminal = "done";
+					break;
+				}
 				if (event.type === "turn-settled") {
 					// The raced-settle terminal: no turn to attach to — the
 					// record is current; the settle hook refetches.
+					terminal = "settled";
 					await reader.cancel().catch(() => {});
 					this.onReattachSettled?.();
-					return;
+					return "settled";
 				}
 				const acted = this.applyWireEvent(event);
 				if (!sawEvent && acted) {
@@ -448,8 +480,10 @@ export class SessionModel {
 		} finally {
 			this.streamingIds = new Set();
 			this.executions = new Map();
-			if (this.statusValue !== "error") this.setStatus("ready");
+			const reconnecting = terminal === "dropped" && this.reconnectOnDrop;
+			if (!reconnecting && this.statusValue !== "error") this.setStatus("ready");
 		}
+		return terminal;
 	}
 
 	/**
@@ -466,6 +500,16 @@ export class SessionModel {
 	 * through the SAME consume path.
 	 */
 	async resumeStream(refetchRecordFirst = true): Promise<void> {
+		this.dropAttempts = 0;
+		this.recoverPending = false;
+		return this.openStream(refetchRecordFirst, false);
+	}
+
+	private async openStream(refetchRecordFirst: boolean, isRetry: boolean): Promise<void> {
+		if (!isRetry) {
+			this.dropAttempts = 0;
+			this.recoverPending = false;
+		}
 		this.consumeAbort?.abort();
 		const controller = new AbortController();
 		this.consumeAbort = controller;
@@ -518,12 +562,47 @@ export class SessionModel {
 				signal: controller.signal,
 			});
 			if (!res.ok) throw new Error((await res.text()) || "Failed to attach to the running turn.");
-			await this.consumeStream(res);
+			const outcome = await this.consumeStream(res);
+			if (outcome === "dropped" && this.reconnectOnDrop && this.consumeAbort === controller) {
+				await this.afterDrop(controller);
+				return;
+			}
+			if (outcome !== "dropped") {
+				this.dropAttempts = 0;
+				this.recoverPending = false;
+			}
 		} catch (err) {
 			if ((err as Error).name === "AbortError") return; // a newer consume won
+			if (this.reconnectOnDrop && this.consumeAbort === controller && isTransientStreamError(err)) {
+				try {
+					await this.afterDrop(controller);
+					return;
+				} catch (retryErr) {
+					if ((retryErr as Error).name === "AbortError") return;
+					err = retryErr;
+				}
+			}
+			this.recoverPending = false;
 			this.setError((err as Error).message);
 			this.setStatus("error");
 		}
+	}
+
+	/** The socket died while the server turn is still the source of truth.
+	 *  Back off and reattach. After STREAM_RECONNECT_MAX, leave recoverPending
+	 *  so a visibility/online event can start a fresh budget. */
+	private async afterDrop(controller: AbortController): Promise<void> {
+		this.dropAttempts += 1;
+		if (this.dropAttempts > STREAM_RECONNECT_MAX) {
+			this.recoverPending = true;
+			this.setError("The connection dropped while a turn was still running. It will resume when the page is visible again.");
+			this.setStatus("error");
+			return;
+		}
+		const wait = this.reconnectDelayMs ?? Math.min(8_000, 300 * 2 ** (this.dropAttempts - 1));
+		await delay(wait, controller.signal);
+		if (this.consumeAbort !== controller) return;
+		await this.openStream(true, true);
 	}
 
 	/**

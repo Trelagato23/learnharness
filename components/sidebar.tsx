@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import type { ChatDeleteMode } from "@/src/core";
-import { DumbbellIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon } from "lucide-react";
+import { DumbbellIcon, EllipsisIcon, GlobeIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -65,13 +65,18 @@ declare global {
 			/** Auto-update channel (Wave C, 2026-10-10): "lh:update-status" pushes once a staged update exists. */
 			onUpdateStatus?: (cb: (status: { status: string; version: string | null }) => void) => () => void;
 			installUpdate?: () => void;
+			/** Native browser view (electron/browser-pane.cjs). Absent in a plain browser. */
+			browser?: {
+				setBounds: (rect: { x: number; y: number; width: number; height: number } | null) => void;
+			};
 		};
 	}
 }
 
-const SidebarContext = createContext<{ open: boolean; toggle: () => void }>({
+const SidebarContext = createContext<{ open: boolean; toggle: () => void; closeIfPhone: () => void }>({
 	open: false,
 	toggle: () => {},
+	closeIfPhone: () => {},
 });
 
 export function useSidebar() {
@@ -107,8 +112,12 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 		void window.lh?.getZoom?.().then(setZoomVar);
 
 		const stored = localStorage.getItem(STORAGE_KEY);
-		// Default: open (first run introduces the sidebar).
-		setOpen(stored === null ? true : stored === "1");
+		// Default: open (first run introduces the sidebar). A phone-width
+		// window starts closed: the sidebar is a full-screen sheet there,
+		// and covering the lesson on every load is the wrong default. The
+		// stored desktop preference is left untouched.
+		const phone = window.matchMedia("(max-width: 639px)").matches;
+		setOpen(phone ? false : stored === null ? true : stored === "1");
 		setMounted(true);
 		return () => off?.();
 	}, []);
@@ -143,6 +152,12 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 		});
 	}, [narrow, open]);
 
+	// Navigation on a phone closes the sheet. It does not write the desktop
+	// preference — a reload on a wide window still restores that choice.
+	const closeIfPhone = useCallback(() => {
+		if (window.matchMedia("(max-width: 639px)").matches) setOpen(false);
+	}, []);
+
 	// ⌘B: the global shortcut dispatches kbdEventForAction("toggle-sidebar")
 	// and the context answers on exactly that name — the shared spelling
 	// is the fix for the interlude bug (the listener sat on the pre-
@@ -157,7 +172,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, [toggle]);
 
 	return (
-		<SidebarContext.Provider value={{ open: open && !narrow, toggle }}>
+		<SidebarContext.Provider value={{ open: open && !narrow, toggle, closeIfPhone }}>
 			{/* transitions gated on mount: no slide-in flash on page load */}
 			<div className={cn("flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")}>{children}</div>
 		</SidebarContext.Provider>
@@ -277,19 +292,22 @@ export function SessionRow({
 	 *  visually distinct from the active session, which stays filled. */
 	kbdSelected?: boolean;
 	/** Right-click opens the context menu (wave 6: Rename / Delete). */
-	onContextMenu?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+	onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void;
 }) {
 	return (
+		<div
+			className={cn(
+				"relative mb-0.5 flex w-full items-center rounded-lg transition-colors hover:bg-accent",
+				active && "bg-accent",
+				kbdSelected && !active && "bg-accent/60 ring-1 ring-border",
+			)}
+		>
 		<button
 			type="button"
 			onClick={onOpen}
 			onContextMenu={onContextMenu}
 			data-testid={kbdSelected ? "session-row-kbd" : "session-row"}
-			className={cn(
-				"relative mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent",
-				active && "bg-accent",
-				kbdSelected && !active && "bg-accent/60 ring-1 ring-border",
-			)}
+			className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
 		>
 			<SessionStatus busy={chat.busy || chat.compacting} />
 			<span className="min-w-0 flex-1">
@@ -308,6 +326,18 @@ export function SessionRow({
 				<DumbbellIcon className="size-3.5 shrink-0 text-muted-foreground/70" aria-label="Practice session" />
 			)}
 		</button>
+		{onContextMenu && (
+			<button
+				type="button"
+				aria-label={`Actions for ${chat.title}`}
+				data-testid="session-row-actions"
+				className="mr-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground sm:hidden"
+				onClick={onContextMenu}
+			>
+				<EllipsisIcon className="size-5" />
+			</button>
+		)}
+		</div>
 	);
 }
 
@@ -368,7 +398,7 @@ export type SessionKindFilter = "teach" | "all" | "practice";
 const KIND_FILTER_KEY = "lh:session-kind-filter";
 
 function SessionsSidebar() {
-	const { open, toggle } = useSidebar();
+	const { open, toggle, closeIfPhone } = useSidebar();
 	const [chats, setChats] = useState<ChatListItem[] | null>(null);
 	const [query, setQuery] = useState("");
 	const [kindFilter, setKindFilter] = useState<SessionKindFilter>("all");
@@ -382,6 +412,9 @@ function SessionsSidebar() {
 	}, []);
 	const pathname = usePathname();
 	const router = useRouter();
+	useEffect(() => {
+		closeIfPhone();
+	}, [pathname, closeIfPhone]);
 	const { open: openSettings } = useSettingsDialog();
 
 	/* New session (owner, 2026-09-13): NO POST — the button opens the
@@ -529,7 +562,7 @@ function SessionsSidebar() {
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [deleting, setDeleting] = useState<ChatListItem | null>(null);
 
-	const openContext = (e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => {
+	const openContext = (e: React.MouseEvent<HTMLElement>, chat: ChatListItem) => {
 		e.preventDefault(); // suppress the native menu
 		ctxAnchorRef.current = e.currentTarget;
 		setCtxChatId(chat.id);
@@ -625,7 +658,7 @@ function SessionsSidebar() {
 
 	return (
 		<aside
-			className={cn("sidebar-motion shrink-0 overflow-hidden duration-200", open ? "w-72" : "w-0")}
+			className={cn("lh-sidebar sidebar-motion shrink-0 overflow-hidden duration-200", open ? "w-72" : "w-0")}
 			aria-hidden={!open}
 		>
 			<div className="flex h-full w-72 flex-col border-r bg-background">
@@ -695,6 +728,15 @@ function SessionsSidebar() {
 						Practice
 						<span className="sr-only">create a new practice session</span>
 					</button>
+					<Link
+						href="/browse"
+						data-testid="open-browser"
+						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					>
+						<GlobeIcon className="size-3" />
+						Browser
+						<span className="sr-only">open the in-app browser</span>
+					</Link>
 				</div>
 
 				<div className="mx-3 mb-2 flex items-center gap-2">
@@ -827,6 +869,7 @@ function SessionsSidebar() {
 					{/* Settings entry (settings-app wave): same row language as
 					    New session — quiet, bottom-pinned, opens the centered
 					    dialog (also mod+, in the keyboard registry). */}
+					<SignOutRow />
 					<div className="px-3 pb-3 pt-1">
 						<Hint label="Settings" action="open-settings" side="right">
 							<button
@@ -917,6 +960,41 @@ function SessionsSidebar() {
 					onDeleted={onDeleted}
 				/>
 			</aside>
+	);
+}
+
+/** Shown only when the server has LH_PASSWORD set. Hidden in the desktop app. */
+function SignOutRow() {
+	const [on, setOn] = useState(false);
+	useEffect(() => {
+		let cancelled = false;
+		void fetch("/api/login")
+			.then(async (res) => {
+				if (!res.ok) return;
+				const body = (await res.json()) as { required?: boolean };
+				if (!cancelled && body.required) setOn(true);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+	if (!on) return null;
+	return (
+		<div className="px-3 pb-1 pt-1">
+		<button
+			type="button"
+			data-testid="sign-out"
+			className="flex min-h-11 w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+			onClick={() => {
+				void fetch("/api/logout", { method: "POST" }).finally(() => {
+					window.location.assign("/login");
+				});
+			}}
+		>
+			Sign out
+		</button>
+		</div>
 	);
 }
 

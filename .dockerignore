@@ -1,0 +1,13 @@
+node_modules
+.next
+data
+dist
+.git
+auth.json
+.env
+.env.*
+.fresh-data
+*.log
+.DS_Store
+.memory
+real-data-extraction

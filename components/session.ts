@@ -31,7 +31,7 @@ export function useChatSession({ chatId, initialMessages, initiallyInFlight }: U
 	// re-render. The ref pattern keeps it stable across renders.
 	const modelRef = useRef<SessionModel | null>(null);
 	if (modelRef.current === null) {
-		modelRef.current = new SessionModel({ chatId, initialMessages });
+		modelRef.current = new SessionModel({ chatId, initialMessages, reconnectOnDrop: true });
 	}
 	const model = modelRef.current;
 	// The render VERSION — bumped by every model change, so the state memo
@@ -70,6 +70,40 @@ export function useChatSession({ chatId, initialMessages, initiallyInFlight }: U
 			model.stop();
 		};
 	}, [initiallyInFlight, model]);
+
+	// A locked phone freezes the page and kills the socket without unmounting,
+	// so the mount-only reattach never runs again. Coming back (or a bfcache
+	// restore, or the network returning) reattaches: the server turn kept
+	// going and the stream replays from its first event. A sub-second tab
+	// switch does not, so a healthy desktop stream is left alone.
+	useEffect(() => {
+		let hiddenAt = 0;
+		const recover = () => {
+			const status = model.getState().status;
+			if (status === "streaming" || status === "submitted" || model.recoverPending) {
+				void model.resumeStream(true);
+			}
+		};
+		const onVisibility = () => {
+			if (document.visibilityState === "hidden") {
+				hiddenAt = Date.now();
+				return;
+			}
+			if (hiddenAt !== 0 && Date.now() - hiddenAt < 1_500) return;
+			recover();
+		};
+		const onPageShow = (event: PageTransitionEvent) => {
+			if (event.persisted) recover();
+		};
+		document.addEventListener("visibilitychange", onVisibility);
+		window.addEventListener("online", recover);
+		window.addEventListener("pageshow", onPageShow);
+		return () => {
+			document.removeEventListener("visibilitychange", onVisibility);
+			window.removeEventListener("online", recover);
+			window.removeEventListener("pageshow", onPageShow);
+		};
+	}, [model]);
 
 	// The view + state, derived per model change from the model.
 	const state = useMemo<SessionState>(() => model.getState(), [model, version] as const);

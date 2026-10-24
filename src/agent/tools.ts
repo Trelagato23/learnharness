@@ -24,6 +24,7 @@ import { lsTool } from "./tools/ls.ts";
 import { findTool } from "./tools/find.ts";
 import { grepTool } from "./tools/grep.ts";
 import { healToolRecord } from "./tools/heal.ts";
+import { browserTools } from "./tools/browser.ts";
 import type { GraphStore } from "../core/ports.ts";
 
 export { jobTools };
@@ -327,6 +328,7 @@ export function createProberTools(
 				ls: lsTool,
 				find: findTool,
 				grep: grepTool,
+				...browserTools(),
 				// Job dispatch in the probe phase (owner ruling, 2026-09-20):
 				// research + pdf are ALWAYS available in every phase — the
 				// prober can verify facts or read learner PDFs while assessing.
@@ -461,6 +463,7 @@ export function createTeacherTools(
 			ls: lsTool,
 			find: findTool,
 			grep: grepTool,
+			...browserTools(),
 			...planTools(ctx),
 			// Fix wave (2026-09-20): searchAvailable was RECEIVED here but
 			// DROPPED when building the inner JobToolContext — the drop-gate
